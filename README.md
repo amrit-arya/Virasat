@@ -45,4 +45,9 @@ This is a comprehensive digital legacy management platform that helps users secu
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.    
+
+
+
+
+

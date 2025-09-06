@@ -59,6 +59,387 @@ export type Database = {
         }
         Relationships: []
       }
+      bank_accounts: {
+        Row: {
+          id: number
+          user_id: string
+          type: string
+          bank: string
+          account_number: string
+          balance: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          type: string
+          bank: string
+          account_number: string
+          balance: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          type?: string
+          bank?: string
+          account_number?: string
+          balance?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      investments: {
+        Row: {
+          id: number
+          user_id: string
+          type: string
+          scheme: string | null
+          company: string | null
+          units: string | null
+          shares: string | null
+          current_value: string
+          gain_loss: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          type: string
+          scheme?: string | null
+          company?: string | null
+          units?: string | null
+          shares?: string | null
+          current_value: string
+          gain_loss?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          type?: string
+          scheme?: string | null
+          company?: string | null
+          units?: string | null
+          shares?: string | null
+          current_value?: string
+          gain_loss?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      health_records: {
+        Row: {
+          id: number
+          user_id: string
+          type: string
+          provider: string
+          date: string
+          status: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          type: string
+          provider: string
+          date: string
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          type?: string
+          provider?: string
+          date?: string
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      medications: {
+        Row: {
+          id: number
+          user_id: string
+          name: string
+          dosage: string
+          frequency: string
+          prescribed_by: string
+          start_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          name: string
+          dosage: string
+          frequency: string
+          prescribed_by: string
+          start_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          name?: string
+          dosage?: string
+          frequency?: string
+          prescribed_by?: string
+          start_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      passwords: {
+        Row: {
+          id: number
+          user_id: string
+          service: string
+          username: string
+          password: string
+          category: string
+          last_updated: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          service: string
+          username: string
+          password: string
+          category?: string
+          last_updated?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          service?: string
+          username?: string
+          password?: string
+          category?: string
+          last_updated?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      security_questions: {
+        Row: {
+          id: number
+          user_id: string
+          service: string
+          question: string
+          answer: string
+          category: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          service: string
+          question: string
+          answer: string
+          category?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          service?: string
+          question?: string
+          answer?: string
+          category?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      properties: {
+        Row: {
+          id: number
+          user_id: string
+          type: string
+          address: string
+          area: string
+          value: string
+          registration_number: string | null
+          purchase_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          type: string
+          address: string
+          area: string
+          value: string
+          registration_number?: string | null
+          purchase_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          type?: string
+          address?: string
+          area?: string
+          value?: string
+          registration_number?: string | null
+          purchase_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vehicles: {
+        Row: {
+          id: number
+          user_id: string
+          type: string
+          model: string
+          registration_number: string
+          purchase_value: string | null
+          current_value: string | null
+          insurance_expiry: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          type: string
+          model: string
+          registration_number: string
+          purchase_value?: string | null
+          current_value?: string | null
+          insurance_expiry?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          type?: string
+          model?: string
+          registration_number?: string
+          purchase_value?: string | null
+          current_value?: string | null
+          insurance_expiry?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      insurance_policies: {
+        Row: {
+          id: number
+          user_id: string
+          type: string
+          provider: string
+          policy_number: string
+          premium_amount: string
+          coverage_amount: string
+          start_date: string
+          end_date: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          type: string
+          provider: string
+          policy_number: string
+          premium_amount: string
+          coverage_amount: string
+          start_date: string
+          end_date: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          type?: string
+          provider?: string
+          policy_number?: string
+          premium_amount?: string
+          coverage_amount?: string
+          start_date?: string
+          end_date?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      nominees: {
+        Row: {
+          id: number
+          user_id: string
+          name: string
+          relationship: string
+          phone: string | null
+          email: string | null
+          address: string | null
+          percentage: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          name: string
+          relationship: string
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          percentage: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          name?: string
+          relationship?: string
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          percentage?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

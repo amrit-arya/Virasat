@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Document {
   id: string;
@@ -25,41 +27,97 @@ interface Document {
   type: string;
   size: string;
   category: string;
-  uploadDate: string;
+  upload_date: string;
+  file_path: string;
 }
 
 const Upload = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [category, setCategory] = useState("insurance");
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   
-  // Mock uploaded documents
-  const [documents] = useState<Document[]>([
-    {
-      id: "1",
-      name: "Life_Insurance_Policy.pdf",
-      type: "PDF",
-      size: "2.4 MB",
-      category: "Insurance",
-      uploadDate: "2024-01-15"
-    },
-    {
-      id: "2", 
-      name: "Bank_Statement_Jan2024.pdf",
-      type: "PDF",
-      size: "1.8 MB",
-      category: "Banking",
-      uploadDate: "2024-01-10"
-    },
-    {
-      id: "3",
-      name: "Property_Deed.pdf",
-      type: "PDF", 
-      size: "3.2 MB",
-      category: "Properties",
-      uploadDate: "2024-01-05"
+  const [documents, setDocuments] = useState<Document[]>([]);
+
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    loadDocuments();
+  }, []);
+
+  const loadDocuments = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to view your documents",
+          variant: "destructive"
+        });
+        navigate('/login');
+        return;
+      }
+
+      // List files from Supabase Storage
+      const { data: files, error } = await supabase.storage
+        .from('documents')
+        .list(user.id, {
+          limit: 100,
+          offset: 0,
+        });
+
+      if (error) {
+        console.error('Error loading documents:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load documents",
+          variant: "destructive"
+        });
+      } else {
+        // Convert storage files to document format
+        const documentList = files?.map(file => ({
+          id: file.id,
+          name: file.name,
+          type: file.name.split('.').pop()?.toUpperCase() || 'FILE',
+          size: formatFileSize(file.metadata?.size || 0),
+          category: getCategoryFromPath(file.name),
+          upload_date: new Date(file.created_at).toISOString().split('T')[0],
+          file_path: `${user.id}/${file.name}`
+        })) || [];
+        
+        setDocuments(documentList);
+      }
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load documents",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getCategoryFromPath = (filename: string): string => {
+    // Simple categorization based on filename
+    if (filename.toLowerCase().includes('insurance')) return 'Insurance';
+    if (filename.toLowerCase().includes('bank')) return 'Banking';
+    if (filename.toLowerCase().includes('medical') || filename.toLowerCase().includes('health')) return 'Medical';
+    if (filename.toLowerCase().includes('property')) return 'Property';
+    return 'Other';
+  };
 
   const categories = [
     { value: "insurance", label: "Insurance" },
@@ -79,7 +137,7 @@ const Upload = () => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (selectedFiles.length === 0) {
       toast({
         title: "No files selected",
@@ -89,13 +147,173 @@ const Upload = () => {
       return;
     }
 
-    // Simulate upload
-    toast({
-      title: "Upload successful!",
-      description: `${selectedFiles.length} file(s) uploaded successfully.`,
-    });
+    try {
+      setUploading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to upload documents",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setSelectedFiles([]);
+      // Upload each file to Supabase Storage
+      const uploadPromises = selectedFiles.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${file.name}`;
+        const filePath = `${user.id}/${fileName}`;
+
+        console.log('Uploading file:', file.name, 'to path:', filePath);
+
+        const { error } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+
+        if (error) {
+          console.error('Upload error for file:', file.name, error);
+          throw error;
+        }
+
+        console.log('Successfully uploaded:', file.name);
+
+        return {
+          id: fileName,
+          name: file.name,
+          type: fileExt?.toUpperCase() || 'FILE',
+          size: formatFileSize(file.size),
+          category: getCategoryFromPath(file.name),
+          upload_date: new Date().toISOString().split('T')[0],
+          file_path: filePath
+        };
+      });
+
+      const uploadedDocuments = await Promise.all(uploadPromises);
+      
+      // Update the documents list
+      setDocuments(prev => [...uploadedDocuments, ...prev]);
+      setSelectedFiles([]);
+
+      toast({
+        title: "Upload successful!",
+        description: `${selectedFiles.length} file(s) uploaded successfully.`,
+      });
+    } catch (error: any) {
+      console.error('Error uploading files:', error);
+      toast({
+        title: "Upload failed",
+        description: error?.message || "Failed to upload files. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownloadDocument = async (doc: Document) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .download(doc.file_path);
+
+      if (error) {
+        console.error('Error downloading document:', error);
+        toast({
+          title: "Error",
+          description: "Failed to download document",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create download link
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Download started",
+        description: `${doc.name} is being downloaded.`,
+      });
+    } catch (error: any) {
+      console.error('Error downloading document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to download document",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleViewDocument = async (doc: Document) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.file_path, 3600); // 1 hour expiry
+
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        toast({
+          title: "Error",
+          description: "Failed to open document",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Open document in new tab
+      window.open(data.signedUrl, '_blank');
+
+      toast({
+        title: "Document opened",
+        description: `${doc.name} is opening in a new tab.`,
+      });
+    } catch (error: any) {
+      console.error('Error viewing document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to open document",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteDocument = async (doc: Document) => {
+    try {
+      const { error } = await supabase.storage
+        .from('documents')
+        .remove([doc.file_path]);
+
+      if (error) {
+        console.error('Error deleting document:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete document",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      toast({
+        title: "Document deleted",
+        description: `${doc.name} has been deleted.`,
+      });
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete document",
+        variant: "destructive"
+      });
+    }
   };
 
   const getFileIcon = (fileName: string) => {
@@ -104,6 +322,22 @@ const Upload = () => {
     if (['jpg', 'jpeg', 'png', 'gif'].includes(extension || '')) return <Image className="h-5 w-5 text-blue-500" />;
     return <File className="h-5 w-5 text-gray-500" />;
   };
+
+  if (loading) {
+    return (
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full">
+          <AppSidebar />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading your documents...</p>
+            </div>
+          </div>
+        </div>
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -226,10 +460,10 @@ const Upload = () => {
                     <Button 
                       variant="hero" 
                       onClick={handleUpload}
-                      disabled={selectedFiles.length === 0}
+                      disabled={selectedFiles.length === 0 || uploading}
                     >
                       <UploadIcon className="h-4 w-4 mr-2" />
-                      Upload Documents
+                      {uploading ? 'Uploading...' : 'Upload Documents'}
                     </Button>
                   </div>
 
@@ -253,18 +487,32 @@ const Upload = () => {
                           <div>
                             <p className="font-medium">{doc.name}</p>
                             <p className="text-sm text-muted-foreground">
-                              {doc.category} • {doc.size} • {doc.uploadDate}
+                              {doc.category} • {doc.size} • {doc.upload_date}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewDocument(doc)}
+                            title="View document"
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDownloadDocument(doc)}
+                            title="Download document"
+                          >
                             <Download className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDeleteDocument(doc)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

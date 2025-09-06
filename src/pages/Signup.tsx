@@ -96,28 +96,41 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md">
+    <div 
+      className="min-h-screen flex items-center justify-center px-4 py-8 relative"
+      style={{
+        backgroundImage: `url('/uploads/c63d55ff-44f6-4588-a4cd-f0df9ee47bc5.png')`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed'
+      }}
+    >
+      {/* Background Overlay */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+      
+      {/* Content */}
+      <div className="relative z-10 w-full max-w-md">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 relative">
           <Button 
             variant="ghost" 
             onClick={() => navigate('/')}
-            className="absolute top-4 left-4"
+            className="absolute top-0 left-0 text-white hover:bg-white/20 z-10"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Home
           </Button>
           <div className="flex items-center justify-center space-x-2 mb-4">
-            <Shield className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold">Virasat</span>
+            <Shield className="h-8 w-8 text-yellow-400" />
+            <span className="text-2xl font-bold text-white">Virasat</span>
           </div>
-          <h1 className="text-2xl font-bold">Join Virasat</h1>
-          <p className="text-muted-foreground">Create your account to get started</p>
+          <h1 className="text-2xl font-bold text-white">Join Virasat</h1>
+          <p className="text-white/80">Create your account to get started</p>
         </div>
 
         {/* Signup Form */}
-        <Card variant="bordered">
+        <Card variant="bordered" className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl">
           <CardHeader>
             <CardTitle>Create Account</CardTitle>
             <CardDescription>
@@ -132,7 +145,7 @@ const Signup = () => {
                   id="name"
                   name="name"
                   type="text"
-                  placeholder="John Doe"
+                  placeholder="Rishabh Pant"
                   value={formData.name}
                   onChange={handleChange}
                   required
@@ -158,7 +171,7 @@ const Signup = () => {
                   id="phone"
                   name="phone"
                   type="tel"
-                  placeholder="+1 (555) 123-4567"
+                  placeholder="+91(your number)"
                   value={formData.phone}
                   onChange={handleChange}
                   required

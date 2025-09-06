@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Banknote, Plus, CreditCard, TrendingUp, PiggyBank, ArrowLeft, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BankAccount {
   id: number;
@@ -32,6 +33,7 @@ const Banking = () => {
   const { toast } = useToast();
   const [showAddAccountForm, setShowAddAccountForm] = useState(false);
   const [showAddInvestmentForm, setShowAddInvestmentForm] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [accountFormData, setAccountFormData] = useState({
     type: "",
     bank: "",
@@ -49,43 +51,8 @@ const Banking = () => {
     gainLoss: ""
   });
 
-  const [accounts, setAccounts] = useState<BankAccount[]>([
-    {
-      id: 1,
-      type: "Savings Account",
-      bank: "State Bank of India",
-      accountNumber: "****1234",
-      balance: "₹2,50,000",
-      status: "Active"
-    },
-    {
-      id: 2,
-      type: "Fixed Deposit",
-      bank: "HDFC Bank",
-      accountNumber: "****5678",
-      balance: "₹5,00,000",
-      status: "Active"
-    }
-  ];
-
-  const [investments, setInvestments] = useState<Investment[]>([
-    {
-      id: 1,
-      type: "Mutual Fund",
-      scheme: "SBI Bluechip Fund",
-      units: "1,250",
-      currentValue: "₹75,000",
-      gainLoss: "+₹15,000"
-    },
-    {
-      id: 2,
-      type: "Stocks",
-      company: "Reliance Industries",
-      shares: "50",
-      currentValue: "₹1,25,000",
-      gainLoss: "+₹25,000"
-    }
-  ]);
+  const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [investments, setInvestments] = useState<Investment[]>([]);
 
   const accountTypes = [
     "Savings Account", "Current Account", "Fixed Deposit", 
@@ -95,6 +62,73 @@ const Banking = () => {
   const investmentTypes = [
     "Mutual Fund", "Stocks", "Bonds", "PPF", "NSC", "FD", "Other"
   ];
+
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to view your data",
+          variant: "destructive"
+        });
+        navigate('/login');
+        return;
+      }
+
+      // Load bank accounts
+      const { data: accountsData, error: accountsError } = await supabase
+        .from('bank_accounts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (accountsError) {
+        console.error('Error loading accounts:', accountsError);
+        toast({
+          title: "Error",
+          description: "Failed to load bank accounts",
+          variant: "destructive"
+        });
+      } else {
+        setAccounts(accountsData || []);
+      }
+
+      // Load investments
+      const { data: investmentsData, error: investmentsError } = await supabase
+        .from('investments')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (investmentsError) {
+        console.error('Error loading investments:', investmentsError);
+        toast({
+          title: "Error",
+          description: "Failed to load investments",
+          variant: "destructive"
+        });
+      } else {
+        setInvestments(investmentsData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAccountChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setAccountFormData(prev => ({
@@ -110,7 +144,7 @@ const Banking = () => {
     }));
   };
 
-  const handleAddAccount = (e: React.FormEvent) => {
+  const handleAddAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!accountFormData.type || !accountFormData.bank || !accountFormData.accountNumber || !accountFormData.balance) {
@@ -122,22 +156,60 @@ const Banking = () => {
       return;
     }
 
-    const newAccount: BankAccount = {
-      id: Date.now(),
-      ...accountFormData
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add accounts",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setAccounts(prev => [...prev, newAccount]);
-    setAccountFormData({ type: "", bank: "", accountNumber: "", balance: "", status: "Active" });
-    setShowAddAccountForm(false);
+      const { data, error } = await supabase
+        .from('bank_accounts')
+        .insert({
+          user_id: user.id,
+          type: accountFormData.type,
+          bank: accountFormData.bank,
+          account_number: accountFormData.accountNumber,
+          balance: accountFormData.balance,
+          status: accountFormData.status
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Account added successfully!",
-      description: `${accountFormData.type} account has been added.`,
-    });
+      if (error) {
+        console.error('Error adding account:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add account",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setAccounts(prev => [data, ...prev]);
+      setAccountFormData({ type: "", bank: "", accountNumber: "", balance: "", status: "Active" });
+      setShowAddAccountForm(false);
+
+      toast({
+        title: "Account added successfully!",
+        description: `${accountFormData.type} account has been added.`,
+      });
+    } catch (error) {
+      console.error('Error adding account:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add account",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleAddInvestment = (e: React.FormEvent) => {
+  const handleAddInvestment = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!investmentFormData.type || !investmentFormData.currentValue) {
@@ -149,36 +221,137 @@ const Banking = () => {
       return;
     }
 
-    const newInvestment: Investment = {
-      id: Date.now(),
-      ...investmentFormData
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add investments",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setInvestments(prev => [...prev, newInvestment]);
-    setInvestmentFormData({ type: "", scheme: "", company: "", units: "", shares: "", currentValue: "", gainLoss: "" });
-    setShowAddInvestmentForm(false);
+      const { data, error } = await supabase
+        .from('investments')
+        .insert({
+          user_id: user.id,
+          type: investmentFormData.type,
+          scheme: investmentFormData.scheme || null,
+          company: investmentFormData.company || null,
+          units: investmentFormData.units || null,
+          shares: investmentFormData.shares || null,
+          current_value: investmentFormData.currentValue,
+          gain_loss: investmentFormData.gainLoss || null
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Investment added successfully!",
-      description: `${investmentFormData.type} investment has been added.`,
-    });
+      if (error) {
+        console.error('Error adding investment:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add investment",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setInvestments(prev => [data, ...prev]);
+      setInvestmentFormData({ type: "", scheme: "", company: "", units: "", shares: "", currentValue: "", gainLoss: "" });
+      setShowAddInvestmentForm(false);
+
+      toast({
+        title: "Investment added successfully!",
+        description: `${investmentFormData.type} investment has been added.`,
+      });
+    } catch (error) {
+      console.error('Error adding investment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add investment",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeleteAccount = (id: number) => {
-    setAccounts(prev => prev.filter(account => account.id !== id));
-    toast({
-      title: "Account removed",
-      description: "The account has been removed from your list.",
-    });
+  const handleDeleteAccount = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('bank_accounts')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting account:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete account",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setAccounts(prev => prev.filter(account => account.id !== id));
+      toast({
+        title: "Account removed",
+        description: "The account has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete account",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeleteInvestment = (id: number) => {
-    setInvestments(prev => prev.filter(investment => investment.id !== id));
-    toast({
-      title: "Investment removed",
-      description: "The investment has been removed from your list.",
-    });
+  const handleDeleteInvestment = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('investments')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting investment:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete investment",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setInvestments(prev => prev.filter(investment => investment.id !== id));
+      toast({
+        title: "Investment removed",
+        description: "The investment has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting investment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete investment",
+        variant: "destructive"
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading your banking data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -458,7 +631,7 @@ const Banking = () => {
               <CardContent className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Account:</span>
-                  <span className="text-sm text-muted-foreground">{account.accountNumber}</span>
+                  <span className="text-sm text-muted-foreground">{account.account_number}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Balance:</span>
@@ -506,11 +679,11 @@ const Banking = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Current Value:</span>
-                  <span className="text-lg font-bold">{investment.currentValue}</span>
+                  <span className="text-lg font-bold">{investment.current_value}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Gain/Loss:</span>
-                  <span className="text-sm text-green-600 font-medium">{investment.gainLoss}</span>
+                  <span className="text-sm text-green-600 font-medium">{investment.gain_loss}</span>
                 </div>
                 <Button 
                   variant="ghost" 

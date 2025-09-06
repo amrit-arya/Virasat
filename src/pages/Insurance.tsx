@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,15 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Shield, Plus, FileText, Calendar, ArrowLeft, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface InsurancePolicy {
   id: number;
   type: string;
   provider: string;
-  policyNumber: string;
-  premium: string;
-  maturityDate: string;
+  policy_number: string;
+  premium_amount: string;
+  coverage_amount: string;
+  start_date: string;
+  end_date: string;
   status: string;
+  created_at: string;
 }
 
 const Insurance = () => {
@@ -24,37 +28,70 @@ const Insurance = () => {
   const [formData, setFormData] = useState({
     type: "",
     provider: "",
-    policyNumber: "",
-    premium: "",
-    maturityDate: "",
+    policy_number: "",
+    premium_amount: "",
+    coverage_amount: "",
+    start_date: "",
+    end_date: "",
     status: "Active"
   });
+  const [loading, setLoading] = useState(true);
 
-  const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([
-    {
-      id: 1,
-      type: "Life Insurance",
-      provider: "LIC India",
-      policyNumber: "LIC-789456123",
-      premium: "₹25,000/year",
-      maturityDate: "2045-12-31",
-      status: "Active"
-    },
-    {
-      id: 2,
-      type: "Health Insurance",
-      provider: "Star Health",
-      policyNumber: "SH-456789123",
-      premium: "₹18,500/year",
-      maturityDate: "2024-03-15",
-      status: "Active"
-    }
-  ]);
+  const [insurancePolicies, setInsurancePolicies] = useState<InsurancePolicy[]>([]);
 
   const insuranceTypes = [
     "Life Insurance", "Health Insurance", "Motor Insurance", 
     "Home Insurance", "Travel Insurance", "Term Insurance", "Other"
   ];
+
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to view your data",
+          variant: "destructive"
+        });
+        navigate('/login');
+        return;
+      }
+
+      // Load insurance policies
+      const { data: policiesData, error: policiesError } = await supabase
+        .from('insurance_policies')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (policiesError) {
+        console.error('Error loading insurance policies:', policiesError);
+        toast({
+          title: "Error",
+          description: "Failed to load insurance policies",
+          variant: "destructive"
+        });
+      } else {
+        setInsurancePolicies(policiesData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
@@ -63,10 +100,10 @@ const Insurance = () => {
     }));
   };
 
-  const handleAddPolicy = (e: React.FormEvent) => {
+  const handleAddPolicy = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.type || !formData.provider || !formData.policyNumber || !formData.premium || !formData.maturityDate) {
+    if (!formData.type || !formData.provider || !formData.policy_number || !formData.premium_amount || !formData.coverage_amount || !formData.start_date || !formData.end_date) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -75,28 +112,104 @@ const Insurance = () => {
       return;
     }
 
-    const newPolicy: InsurancePolicy = {
-      id: Date.now(),
-      ...formData
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add policies",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setInsurancePolicies(prev => [...prev, newPolicy]);
-    setFormData({ type: "", provider: "", policyNumber: "", premium: "", maturityDate: "", status: "Active" });
-    setShowAddForm(false);
+      const { data, error } = await supabase
+        .from('insurance_policies')
+        .insert({
+          user_id: user.id,
+          type: formData.type,
+          provider: formData.provider,
+          policy_number: formData.policy_number,
+          premium_amount: formData.premium_amount,
+          coverage_amount: formData.coverage_amount,
+          start_date: formData.start_date,
+          end_date: formData.end_date,
+          status: formData.status
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Policy added successfully!",
-      description: `${formData.type} policy has been added.`,
-    });
+      if (error) {
+        console.error('Error adding policy:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add policy",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setInsurancePolicies(prev => [data, ...prev]);
+      setFormData({ type: "", provider: "", policy_number: "", premium_amount: "", coverage_amount: "", start_date: "", end_date: "", status: "Active" });
+      setShowAddForm(false);
+
+      toast({
+        title: "Policy added successfully!",
+        description: `${formData.type} policy has been added.`,
+      });
+    } catch (error) {
+      console.error('Error adding policy:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add policy",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeletePolicy = (id: number) => {
-    setInsurancePolicies(prev => prev.filter(policy => policy.id !== id));
-    toast({
-      title: "Policy removed",
-      description: "The policy has been removed from your list.",
-    });
+  const handleDeletePolicy = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('insurance_policies')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting policy:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete policy",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setInsurancePolicies(prev => prev.filter(policy => policy.id !== id));
+      toast({
+        title: "Policy removed",
+        description: "The policy has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting policy:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete policy",
+        variant: "destructive"
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your insurance policies...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -183,36 +296,60 @@ const Insurance = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="policyNumber">Policy Number</Label>
+                  <Label htmlFor="policy_number">Policy Number</Label>
                   <Input
-                    id="policyNumber"
-                    name="policyNumber"
+                    id="policy_number"
+                    name="policy_number"
                     placeholder="Enter policy number"
-                    value={formData.policyNumber}
+                    value={formData.policy_number}
                     onChange={handleChange}
                     required
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="premium">Premium Amount</Label>
+                  <Label htmlFor="premium_amount">Premium Amount</Label>
                   <Input
-                    id="premium"
-                    name="premium"
+                    id="premium_amount"
+                    name="premium_amount"
                     placeholder="e.g., ₹25,000/year"
-                    value={formData.premium}
+                    value={formData.premium_amount}
                     onChange={handleChange}
                     required
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="maturityDate">Maturity Date</Label>
+                  <Label htmlFor="coverage_amount">Coverage Amount</Label>
                   <Input
-                    id="maturityDate"
-                    name="maturityDate"
+                    id="coverage_amount"
+                    name="coverage_amount"
+                    placeholder="e.g., ₹10,00,000"
+                    value={formData.coverage_amount}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="start_date">Start Date</Label>
+                  <Input
+                    id="start_date"
+                    name="start_date"
                     type="date"
-                    value={formData.maturityDate}
+                    value={formData.start_date}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="end_date">End Date</Label>
+                  <Input
+                    id="end_date"
+                    name="end_date"
+                    type="date"
+                    value={formData.end_date}
                     onChange={handleChange}
                     required
                   />
@@ -265,15 +402,23 @@ const Insurance = () => {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Policy Number:</span>
-                  <span className="text-sm text-muted-foreground">{policy.policyNumber}</span>
+                  <span className="text-sm text-muted-foreground">{policy.policy_number}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Premium:</span>
-                  <span className="text-sm text-muted-foreground">{policy.premium}</span>
+                  <span className="text-sm text-muted-foreground">{policy.premium_amount}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm font-medium">Maturity:</span>
-                  <span className="text-sm text-muted-foreground">{policy.maturityDate}</span>
+                  <span className="text-sm font-medium">Coverage:</span>
+                  <span className="text-sm text-muted-foreground">{policy.coverage_amount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Start Date:</span>
+                  <span className="text-sm text-muted-foreground">{policy.start_date}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">End Date:</span>
+                  <span className="text-sm text-muted-foreground">{policy.end_date}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Status:</span>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,54 +18,38 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Nominee {
-  id: string;
+  id: number;
   name: string;
-  relation: string;
-  email: string;
-  phone: string;
-  addedDate: string;
+  relationship: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  percentage: string;
+  created_at: string;
 }
 
 const Nominees = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
-    relation: "",
+    relationship: "",
     email: "",
     phone: "",
-    deathCertificateUrl: ""
+    address: "",
+    percentage: ""
   });
 
+  const [editingNominee, setEditingNominee] = useState<Nominee | null>(null);
+
   // Mock nominees data
-  const [nominees, setNominees] = useState<Nominee[]>([
-    {
-      id: "1",
-      name: "Sarah Johnson",
-      relation: "Spouse",
-      email: "sarah.johnson@email.com", 
-      phone: "+1 (555) 123-4567",
-      addedDate: "2024-01-15"
-    },
-    {
-      id: "2",
-      name: "Michael Johnson",
-      relation: "Son",
-      email: "michael.j@email.com",
-      phone: "+1 (555) 765-4321", 
-      addedDate: "2024-01-10"
-    },
-    {
-      id: "3",
-      name: "Emily Johnson",
-      relation: "Daughter",
-      email: "emily.johnson@email.com",
-      phone: "+1 (555) 987-6543",
-      addedDate: "2024-01-05"
-    }
-  ]);
+  const [nominees, setNominees] = useState<Nominee[]>([]);
 
   const relations = [
     "Spouse", "Son", "Daughter", "Father", "Mother", 
@@ -74,6 +58,55 @@ const Nominees = () => {
   
   const [accessRequests, setAccessRequests] = useState<any[]>([]);
 
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to view your data",
+          variant: "destructive"
+        });
+        navigate('/login');
+        return;
+      }
+
+      // Load nominees
+      const { data: nomineesData, error: nomineesError } = await supabase
+        .from('nominees')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (nomineesError) {
+        console.error('Error loading nominees:', nomineesError);
+        toast({
+          title: "Error",
+          description: "Failed to load nominees",
+          variant: "destructive"
+        });
+      } else {
+        setNominees(nomineesData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
       ...prev,
@@ -81,10 +114,23 @@ const Nominees = () => {
     }));
   };
 
-  const handleAddNominee = (e: React.FormEvent) => {
+  const handleEditNominee = (nominee: Nominee) => {
+    setEditingNominee(nominee);
+    setFormData({
+      name: nominee.name,
+      relationship: nominee.relationship,
+      email: nominee.email || "",
+      phone: nominee.phone || "",
+      address: nominee.address || "",
+      percentage: nominee.percentage
+    });
+    setShowAddForm(true);
+  };
+
+  const handleUpdateNominee = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.relation || !formData.email || !formData.phone) {
+    if (!formData.name || !formData.relationship || !formData.percentage) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -93,20 +139,119 @@ const Nominees = () => {
       return;
     }
 
-    const newNominee: Nominee = {
-      id: Date.now().toString(),
-      ...formData,
-      addedDate: new Date().toISOString().split('T')[0]
-    };
+    if (!editingNominee) return;
 
-    setNominees(prev => [...prev, newNominee]);
-    setFormData({ name: "", relation: "", email: "", phone: "", deathCertificateUrl: "" });
-    setShowAddForm(false);
+    try {
+      const { data, error } = await supabase
+        .from('nominees')
+        .update({
+          name: formData.name,
+          relationship: formData.relationship,
+          email: formData.email || null,
+          phone: formData.phone || null,
+          address: formData.address || null,
+          percentage: formData.percentage
+        })
+        .eq('id', editingNominee.id)
+        .select()
+        .single();
 
-    toast({
-      title: "Nominee added successfully!",
-      description: `${formData.name} has been added as your nominee.`,
-    });
+      if (error) {
+        console.error('Error updating nominee:', error);
+        toast({
+          title: "Error",
+          description: "Failed to update nominee",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setNominees(prev => prev.map(nominee => 
+        nominee.id === editingNominee.id ? data : nominee
+      ));
+      setFormData({ name: "", relationship: "", email: "", phone: "", address: "", percentage: "" });
+      setEditingNominee(null);
+      setShowAddForm(false);
+
+      toast({
+        title: "Nominee updated successfully!",
+        description: `${formData.name} has been updated.`,
+      });
+    } catch (error) {
+      console.error('Error updating nominee:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update nominee",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAddNominee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.name || !formData.relationship || !formData.percentage) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add nominees",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('nominees')
+        .insert({
+          user_id: user.id,
+          name: formData.name,
+          relationship: formData.relationship,
+          email: formData.email || null,
+          phone: formData.phone || null,
+          address: formData.address || null,
+          percentage: formData.percentage
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding nominee:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add nominee",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setNominees(prev => [data, ...prev]);
+      setFormData({ name: "", relationship: "", email: "", phone: "", address: "", percentage: "" });
+      setEditingNominee(null);
+      setShowAddForm(false);
+
+      toast({
+        title: "Nominee added successfully!",
+        description: `${formData.name} has been added as your nominee.`,
+      });
+    } catch (error) {
+      console.error('Error adding nominee:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add nominee",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleAccessRequest = (deathCertUrl: string) => {
@@ -148,13 +293,53 @@ const Nominees = () => {
     }
   };
 
-  const handleDeleteNominee = (id: string) => {
-    setNominees(prev => prev.filter(nominee => nominee.id !== id));
-    toast({
-      title: "Nominee removed",
-      description: "The nominee has been removed from your list.",
-    });
+  const handleDeleteNominee = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('nominees')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting nominee:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete nominee",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setNominees(prev => prev.filter(nominee => nominee.id !== id));
+      toast({
+        title: "Nominee removed",
+        description: "The nominee has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting nominee:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete nominee",
+        variant: "destructive"
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full">
+          <AppSidebar />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading your nominees...</p>
+            </div>
+          </div>
+        </div>
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -223,14 +408,14 @@ const Nominees = () => {
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <Plus className="h-5 w-5" />
-                      <span>Add New Nominee</span>
+                      <span>{editingNominee ? 'Edit Nominee' : 'Add New Nominee'}</span>
                     </CardTitle>
                     <CardDescription>
-                      Add a trusted person who will have access to your information
+                      {editingNominee ? 'Update nominee information' : 'Add a trusted person who will have access to your information'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleAddNominee} className="space-y-4">
+                    <form onSubmit={editingNominee ? handleUpdateNominee : handleAddNominee} className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="name">Full Name</Label>
@@ -248,8 +433,8 @@ const Nominees = () => {
                           <Label htmlFor="relation">Relation</Label>
                           <select
                             id="relation"
-                            name="relation"
-                            value={formData.relation}
+                            name="relationship"
+                            value={formData.relationship}
                             onChange={handleChange}
                             className="flex h-10 w-full rounded-md border border-input-border bg-input px-3 py-2 text-sm transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focus"
                             required
@@ -288,20 +473,31 @@ const Nominees = () => {
                             required
                           />
                         </div>
+                        
                         <div className="space-y-2">
-                          <Label htmlFor="deathCertificateUrl">Death Certificate URL (Optional)</Label>
+                          <Label htmlFor="address">Address (Optional)</Label>
                           <Input
-                            id="deathCertificateUrl"
-                            name="deathCertificateUrl"
-                            type="url"
-                            placeholder="https://example.gov.in/certificate/..."
-                            value={formData.deathCertificateUrl}
+                            id="address"
+                            name="address"
+                            placeholder="Enter address"
+                            value={formData.address}
                             onChange={handleChange}
                           />
-                          <p className="text-xs text-muted-foreground">
-                            URL to official government death certificate (.gov.in domain required for access)
-                          </p>
                         </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="percentage">Percentage (%)</Label>
+                          <Input
+                            id="percentage"
+                            name="percentage"
+                            type="number"
+                            placeholder="e.g., 50"
+                            value={formData.percentage}
+                            onChange={handleChange}
+                            required
+                          />
+                        </div>
+                        
                       </div>
                       
                       <div className="flex justify-end space-x-4">
@@ -313,7 +509,7 @@ const Nominees = () => {
                           Cancel
                         </Button>
                         <Button type="submit" variant="hero">
-                          Add Nominee
+                          {editingNominee ? 'Update Nominee' : 'Add Nominee'}
                         </Button>
                       </div>
                     </form>
@@ -348,7 +544,7 @@ const Nominees = () => {
                             </div>
                             <div>
                               <h3 className="font-semibold text-lg">{nominee.name}</h3>
-                              <p className="text-sm text-muted-foreground">{nominee.relation}</p>
+                              <p className="text-sm text-muted-foreground">{nominee.relationship}</p>
                             </div>
                           </div>
                           
@@ -365,7 +561,11 @@ const Nominees = () => {
                             </div>
                             
                             <div className="flex items-center space-x-2">
-                              <Button variant="ghost" size="sm">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleEditNominee(nominee)}
+                              >
                                 <Edit className="h-4 w-4" />
                               </Button>
                               <Button 

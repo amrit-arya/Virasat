@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Home, Plus, MapPin, FileText, IndianRupee, ArrowLeft, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Property {
   id: number;
@@ -13,18 +14,18 @@ interface Property {
   address: string;
   area: string;
   value: string;
-  registrationNumber: string;
-  purchaseDate: string;
+  registration_number: string | null;
+  purchase_date: string | null;
 }
 
 interface Vehicle {
   id: number;
   type: string;
   model: string;
-  registrationNumber: string;
-  purchaseValue: string;
-  currentValue: string;
-  insuranceExpiry: string;
+  registration_number: string;
+  purchase_value: string | null;
+  current_value: string | null;
+  insurance_expiry: string | null;
 }
 
 const Properties = () => {
@@ -32,64 +33,26 @@ const Properties = () => {
   const { toast } = useToast();
   const [showAddPropertyForm, setShowAddPropertyForm] = useState(false);
   const [showAddVehicleForm, setShowAddVehicleForm] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [propertyFormData, setPropertyFormData] = useState({
     type: "",
     address: "",
     area: "",
     value: "",
-    registrationNumber: "",
-    purchaseDate: ""
+    registration_number: "",
+    purchase_date: ""
   });
   const [vehicleFormData, setVehicleFormData] = useState({
     type: "",
     model: "",
-    registrationNumber: "",
-    purchaseValue: "",
-    currentValue: "",
-    insuranceExpiry: ""
+    registration_number: "",
+    purchase_value: "",
+    current_value: "",
+    insurance_expiry: ""
   });
 
-  const [properties, setProperties] = useState<Property[]>([
-    {
-      id: 1,
-      type: "Residential House",
-      address: "123 Green Avenue, Mumbai, Maharashtra",
-      area: "1,800 sq ft",
-      value: "₹1,25,00,000",
-      registrationNumber: "MH-REG-2019-45678",
-      purchaseDate: "2019-03-15"
-    },
-    {
-      id: 2,
-      type: "Commercial Plot",
-      address: "Plot No. 45, Sector 18, Gurgaon, Haryana",
-      area: "2,400 sq ft",
-      value: "₹85,00,000",
-      registrationNumber: "HR-REG-2021-78901",
-      purchaseDate: "2021-11-22"
-    }
-  ];
-
-  const [vehicles, setVehicles] = useState<Vehicle[]>([
-    {
-      id: 1,
-      type: "Car",
-      model: "Honda City 2020",
-      registrationNumber: "MH-01-AB-1234",
-      purchaseValue: "₹12,50,000",
-      currentValue: "₹8,75,000",
-      insuranceExpiry: "2024-06-15"
-    },
-    {
-      id: 2,
-      type: "Motorcycle",
-      model: "Royal Enfield Classic 350",
-      registrationNumber: "MH-01-CD-5678",
-      purchaseValue: "₹1,85,000",
-      currentValue: "₹1,25,000",
-      insuranceExpiry: "2024-09-10"
-    }
-  ]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
   const propertyTypes = [
     "Residential House", "Apartment", "Commercial Plot", "Office Space", 
@@ -99,6 +62,73 @@ const Properties = () => {
   const vehicleTypes = [
     "Car", "Motorcycle", "Scooter", "Bicycle", "Truck", "Bus", "Other"
   ];
+
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to view your data",
+          variant: "destructive"
+        });
+        navigate('/login');
+        return;
+      }
+
+      // Load properties
+      const { data: propertiesData, error: propertiesError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (propertiesError) {
+        console.error('Error loading properties:', propertiesError);
+        toast({
+          title: "Error",
+          description: "Failed to load properties",
+          variant: "destructive"
+        });
+      } else {
+        setProperties(propertiesData || []);
+      }
+
+      // Load vehicles
+      const { data: vehiclesData, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (vehiclesError) {
+        console.error('Error loading vehicles:', vehiclesError);
+        toast({
+          title: "Error",
+          description: "Failed to load vehicles",
+          variant: "destructive"
+        });
+      } else {
+        setVehicles(vehiclesData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePropertyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setPropertyFormData(prev => ({
@@ -114,7 +144,7 @@ const Properties = () => {
     }));
   };
 
-  const handleAddProperty = (e: React.FormEvent) => {
+  const handleAddProperty = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!propertyFormData.type || !propertyFormData.address || !propertyFormData.area || !propertyFormData.value) {
@@ -126,25 +156,64 @@ const Properties = () => {
       return;
     }
 
-    const newProperty: Property = {
-      id: Date.now(),
-      ...propertyFormData
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add properties",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setProperties(prev => [...prev, newProperty]);
-    setPropertyFormData({ type: "", address: "", area: "", value: "", registrationNumber: "", purchaseDate: "" });
-    setShowAddPropertyForm(false);
+      const { data, error } = await supabase
+        .from('properties')
+        .insert({
+          user_id: user.id,
+          type: propertyFormData.type,
+          address: propertyFormData.address,
+          area: propertyFormData.area,
+          value: propertyFormData.value,
+          registration_number: propertyFormData.registration_number || null,
+          purchase_date: propertyFormData.purchase_date || null
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Property added successfully!",
-      description: `${propertyFormData.type} has been added to your properties.`,
-    });
+      if (error) {
+        console.error('Error adding property:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add property",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setProperties(prev => [data, ...prev]);
+      setPropertyFormData({ type: "", address: "", area: "", value: "", registration_number: "", purchase_date: "" });
+      setShowAddPropertyForm(false);
+
+      toast({
+        title: "Property added successfully!",
+        description: `${propertyFormData.type} has been added to your properties.`,
+      });
+    } catch (error) {
+      console.error('Error adding property:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add property",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleAddVehicle = (e: React.FormEvent) => {
+  const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!vehicleFormData.type || !vehicleFormData.model || !vehicleFormData.registrationNumber) {
+    if (!vehicleFormData.type || !vehicleFormData.model || !vehicleFormData.registration_number) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -153,36 +222,136 @@ const Properties = () => {
       return;
     }
 
-    const newVehicle: Vehicle = {
-      id: Date.now(),
-      ...vehicleFormData
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add vehicles",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setVehicles(prev => [...prev, newVehicle]);
-    setVehicleFormData({ type: "", model: "", registrationNumber: "", purchaseValue: "", currentValue: "", insuranceExpiry: "" });
-    setShowAddVehicleForm(false);
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert({
+          user_id: user.id,
+          type: vehicleFormData.type,
+          model: vehicleFormData.model,
+          registration_number: vehicleFormData.registration_number,
+          purchase_value: vehicleFormData.purchase_value || null,
+          current_value: vehicleFormData.current_value || null,
+          insurance_expiry: vehicleFormData.insurance_expiry || null
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Vehicle added successfully!",
-      description: `${vehicleFormData.type} has been added to your vehicles.`,
-    });
+      if (error) {
+        console.error('Error adding vehicle:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add vehicle",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setVehicles(prev => [data, ...prev]);
+      setVehicleFormData({ type: "", model: "", registration_number: "", purchase_value: "", current_value: "", insurance_expiry: "" });
+      setShowAddVehicleForm(false);
+
+      toast({
+        title: "Vehicle added successfully!",
+        description: `${vehicleFormData.type} has been added to your vehicles.`,
+      });
+    } catch (error) {
+      console.error('Error adding vehicle:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add vehicle",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeleteProperty = (id: number) => {
-    setProperties(prev => prev.filter(property => property.id !== id));
-    toast({
-      title: "Property removed",
-      description: "The property has been removed from your list.",
-    });
+  const handleDeleteProperty = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('properties')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting property:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete property",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setProperties(prev => prev.filter(property => property.id !== id));
+      toast({
+        title: "Property removed",
+        description: "The property has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting property:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete property",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeleteVehicle = (id: number) => {
-    setVehicles(prev => prev.filter(vehicle => vehicle.id !== id));
-    toast({
-      title: "Vehicle removed",
-      description: "The vehicle has been removed from your list.",
-    });
+  const handleDeleteVehicle = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting vehicle:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete vehicle",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setVehicles(prev => prev.filter(vehicle => vehicle.id !== id));
+      toast({
+        title: "Vehicle removed",
+        description: "The vehicle has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting vehicle:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete vehicle",
+        variant: "destructive"
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading your properties and vehicles...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -303,23 +472,23 @@ const Properties = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="registrationNumber">Registration Number</Label>
+                  <Label htmlFor="registration_number">Registration Number</Label>
                   <Input
-                    id="registrationNumber"
-                    name="registrationNumber"
+                    id="registration_number"
+                    name="registration_number"
                     placeholder="e.g., MH-REG-2019-45678"
-                    value={propertyFormData.registrationNumber}
+                    value={propertyFormData.registration_number}
                     onChange={handlePropertyChange}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="purchaseDate">Purchase Date</Label>
+                  <Label htmlFor="purchase_date">Purchase Date</Label>
                   <Input
-                    id="purchaseDate"
-                    name="purchaseDate"
+                    id="purchase_date"
+                    name="purchase_date"
                     type="date"
-                    value={propertyFormData.purchaseDate}
+                    value={propertyFormData.purchase_date}
                     onChange={handlePropertyChange}
                   />
                 </div>
@@ -403,9 +572,9 @@ const Properties = () => {
                   <Label htmlFor="vehicleRegistrationNumber">Registration Number</Label>
                   <Input
                     id="vehicleRegistrationNumber"
-                    name="registrationNumber"
+                    name="registration_number"
                     placeholder="e.g., MH-01-AB-1234"
-                    value={vehicleFormData.registrationNumber}
+                    value={vehicleFormData.registration_number}
                     onChange={handleVehicleChange}
                     required
                   />
@@ -415,9 +584,9 @@ const Properties = () => {
                   <Label htmlFor="purchaseValue">Purchase Value</Label>
                   <Input
                     id="purchaseValue"
-                    name="purchaseValue"
+                    name="purchase_value"
                     placeholder="e.g., ₹12,50,000"
-                    value={vehicleFormData.purchaseValue}
+                    value={vehicleFormData.purchase_value}
                     onChange={handleVehicleChange}
                   />
                 </div>
@@ -426,9 +595,9 @@ const Properties = () => {
                   <Label htmlFor="currentValue">Current Value</Label>
                   <Input
                     id="currentValue"
-                    name="currentValue"
+                    name="current_value"
                     placeholder="e.g., ₹8,75,000"
-                    value={vehicleFormData.currentValue}
+                    value={vehicleFormData.current_value}
                     onChange={handleVehicleChange}
                   />
                 </div>
@@ -437,9 +606,9 @@ const Properties = () => {
                   <Label htmlFor="insuranceExpiry">Insurance Expiry</Label>
                   <Input
                     id="insuranceExpiry"
-                    name="insuranceExpiry"
+                    name="insurance_expiry"
                     type="date"
-                    value={vehicleFormData.insuranceExpiry}
+                    value={vehicleFormData.insurance_expiry}
                     onChange={handleVehicleChange}
                   />
                 </div>
@@ -495,11 +664,11 @@ const Properties = () => {
                 <div className="space-y-1">
                   <div className="flex justify-between">
                     <span className="text-sm font-medium">Registration:</span>
-                    <span className="text-sm text-muted-foreground">{property.registrationNumber}</span>
+                    <span className="text-sm text-muted-foreground">{property.registration_number}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm font-medium">Purchase Date:</span>
-                    <span className="text-sm text-muted-foreground">{property.purchaseDate}</span>
+                    <span className="text-sm text-muted-foreground">{property.purchase_date}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -541,21 +710,21 @@ const Properties = () => {
               <CardContent className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Registration:</span>
-                  <span className="text-sm text-muted-foreground">{vehicle.registrationNumber}</span>
+                  <span className="text-sm text-muted-foreground">{vehicle.registration_number}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-sm font-medium block">Purchase:</span>
-                    <span className="text-sm text-muted-foreground">{vehicle.purchaseValue}</span>
+                    <span className="text-sm text-muted-foreground">{vehicle.purchase_value}</span>
                   </div>
                   <div>
                     <span className="text-sm font-medium block">Current:</span>
-                    <span className="text-sm font-bold">{vehicle.currentValue}</span>
+                    <span className="text-sm font-bold">{vehicle.current_value}</span>
                   </div>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm font-medium">Insurance Expiry:</span>
-                  <span className="text-sm text-orange-600 font-medium">{vehicle.insuranceExpiry}</span>
+                  <span className="text-sm text-orange-600 font-medium">{vehicle.insurance_expiry}</span>
                 </div>
                 <div className="flex gap-2 mt-3">
                   <Button variant="outline" size="sm" className="flex-1">

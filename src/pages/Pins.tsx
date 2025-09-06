@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Plus, Eye, EyeOff, Shield, Key, ArrowLeft, X } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Password {
   id: number;
@@ -13,7 +14,7 @@ interface Password {
   username: string;
   password: string;
   category: string;
-  lastUpdated: string;
+  last_updated: string;
 }
 
 interface SecurityQuestion {
@@ -30,6 +31,7 @@ const Pins = () => {
   const [showPassword, setShowPassword] = useState<{[key: number]: boolean}>({});
   const [showAddPasswordForm, setShowAddPasswordForm] = useState(false);
   const [showAddQuestionForm, setShowAddQuestionForm] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [passwordFormData, setPasswordFormData] = useState({
     service: "",
     username: "",
@@ -43,49 +45,8 @@ const Pins = () => {
     category: "Banking"
   });
 
-  const [passwords, setPasswords] = useState<Password[]>([
-    {
-      id: 1,
-      service: "Online Banking",
-      username: "john.doe@email.com",
-      password: "BankP@ss123",
-      category: "Financial",
-      lastUpdated: "2024-01-15"
-    },
-    {
-      id: 2,
-      service: "Email Account",
-      username: "john.doe@gmail.com",
-      password: "Email2024!",
-      category: "Personal",
-      lastUpdated: "2024-02-01"
-    },
-    {
-      id: 3,
-      service: "Credit Card PIN",
-      username: "HDFC Bank",
-      password: "1234",
-      category: "Financial",
-      lastUpdated: "2023-12-10"
-    }
-  ];
-
-  const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestion[]>([
-    {
-      id: 1,
-      service: "State Bank of India",
-      question: "What is your mother's maiden name?",
-      answer: "Sharma",
-      category: "Banking"
-    },
-    {
-      id: 2,
-      service: "LIC Policy",
-      question: "What is your first pet's name?",
-      answer: "Bruno",
-      category: "Insurance"
-    }
-  ]);
+  const [passwords, setPasswords] = useState<Password[]>([]);
+  const [securityQuestions, setSecurityQuestions] = useState<SecurityQuestion[]>([]);
 
   const passwordCategories = [
     "Personal", "Financial", "Work", "Social Media", "Shopping", "Other"
@@ -94,6 +55,73 @@ const Pins = () => {
   const questionCategories = [
     "Banking", "Insurance", "Social Media", "Email", "Other"
   ];
+
+  // Load data from Supabase on component mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to view your data",
+          variant: "destructive"
+        });
+        navigate('/login');
+        return;
+      }
+
+      // Load passwords
+      const { data: passwordsData, error: passwordsError } = await supabase
+        .from('passwords')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (passwordsError) {
+        console.error('Error loading passwords:', passwordsError);
+        toast({
+          title: "Error",
+          description: "Failed to load passwords",
+          variant: "destructive"
+        });
+      } else {
+        setPasswords(passwordsData || []);
+      }
+
+      // Load security questions
+      const { data: questionsData, error: questionsError } = await supabase
+        .from('security_questions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (questionsError) {
+        console.error('Error loading security questions:', questionsError);
+        toast({
+          title: "Error",
+          description: "Failed to load security questions",
+          variant: "destructive"
+        });
+      } else {
+        setSecurityQuestions(questionsData || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setPasswordFormData(prev => ({
@@ -109,7 +137,7 @@ const Pins = () => {
     }));
   };
 
-  const handleAddPassword = (e: React.FormEvent) => {
+  const handleAddPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!passwordFormData.service || !passwordFormData.username || !passwordFormData.password) {
@@ -121,23 +149,60 @@ const Pins = () => {
       return;
     }
 
-    const newPassword: Password = {
-      id: Date.now(),
-      ...passwordFormData,
-      lastUpdated: new Date().toISOString().split('T')[0]
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add passwords",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setPasswords(prev => [...prev, newPassword]);
-    setPasswordFormData({ service: "", username: "", password: "", category: "Personal" });
-    setShowAddPasswordForm(false);
+      const { data, error } = await supabase
+        .from('passwords')
+        .insert({
+          user_id: user.id,
+          service: passwordFormData.service,
+          username: passwordFormData.username,
+          password: passwordFormData.password,
+          category: passwordFormData.category,
+          last_updated: new Date().toISOString().split('T')[0]
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Credential added successfully!",
-      description: `${passwordFormData.service} credential has been added.`,
-    });
+      if (error) {
+        console.error('Error adding password:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add password",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setPasswords(prev => [data, ...prev]);
+      setPasswordFormData({ service: "", username: "", password: "", category: "Personal" });
+      setShowAddPasswordForm(false);
+
+      toast({
+        title: "Credential added successfully!",
+        description: `${passwordFormData.service} credential has been added.`,
+      });
+    } catch (error) {
+      console.error('Error adding password:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add password",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleAddQuestion = (e: React.FormEvent) => {
+  const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!questionFormData.service || !questionFormData.question || !questionFormData.answer) {
@@ -149,35 +214,120 @@ const Pins = () => {
       return;
     }
 
-    const newQuestion: SecurityQuestion = {
-      id: Date.now(),
-      ...questionFormData
-    };
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to add security questions",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    setSecurityQuestions(prev => [...prev, newQuestion]);
-    setQuestionFormData({ service: "", question: "", answer: "", category: "Banking" });
-    setShowAddQuestionForm(false);
+      const { data, error } = await supabase
+        .from('security_questions')
+        .insert({
+          user_id: user.id,
+          service: questionFormData.service,
+          question: questionFormData.question,
+          answer: questionFormData.answer,
+          category: questionFormData.category
+        })
+        .select()
+        .single();
 
-    toast({
-      title: "Security question added successfully!",
-      description: `${questionFormData.service} security question has been added.`,
-    });
+      if (error) {
+        console.error('Error adding security question:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add security question",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setSecurityQuestions(prev => [data, ...prev]);
+      setQuestionFormData({ service: "", question: "", answer: "", category: "Banking" });
+      setShowAddQuestionForm(false);
+
+      toast({
+        title: "Security question added successfully!",
+        description: `${questionFormData.service} security question has been added.`,
+      });
+    } catch (error) {
+      console.error('Error adding security question:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add security question",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeletePassword = (id: number) => {
-    setPasswords(prev => prev.filter(password => password.id !== id));
-    toast({
-      title: "Credential removed",
-      description: "The credential has been removed from your list.",
-    });
+  const handleDeletePassword = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('passwords')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting password:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete password",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setPasswords(prev => prev.filter(password => password.id !== id));
+      toast({
+        title: "Credential removed",
+        description: "The credential has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting password:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete password",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleDeleteQuestion = (id: number) => {
-    setSecurityQuestions(prev => prev.filter(question => question.id !== id));
-    toast({
-      title: "Security question removed",
-      description: "The security question has been removed from your list.",
-    });
+  const handleDeleteQuestion = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('security_questions')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting security question:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete security question",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setSecurityQuestions(prev => prev.filter(question => question.id !== id));
+      toast({
+        title: "Security question removed",
+        description: "The security question has been removed from your list.",
+      });
+    } catch (error) {
+      console.error('Error deleting security question:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete security question",
+        variant: "destructive"
+      });
+    }
   };
 
   const togglePasswordVisibility = (id: number) => {
@@ -190,6 +340,19 @@ const Pins = () => {
   const maskPassword = (password: string, show: boolean) => {
     return show ? password : '•'.repeat(password.length);
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading your passwords and security questions...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -468,7 +631,7 @@ const Pins = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm font-medium">Last Updated:</span>
-                    <span className="text-sm text-muted-foreground">{password.lastUpdated}</span>
+                    <span className="text-sm text-muted-foreground">{password.last_updated}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">

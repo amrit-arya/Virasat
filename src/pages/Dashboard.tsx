@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DashboardCounts {
@@ -30,6 +31,7 @@ interface DashboardCounts {
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signOut, user } = useAuth();
   const [counts, setCounts] = useState<DashboardCounts>({
     insurance: 0,
     banking: 0,
@@ -137,12 +139,21 @@ const Dashboard = () => {
     },
   ];
 
-  const handleLogout = () => {
-    toast({
-      title: "Logged out successfully",
-      description: "You have been safely logged out.",
-    });
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Logged out successfully",
+        description: "You have been safely logged out.",
+      });
+      navigate('/');
+    } catch (error) {
+      toast({
+        title: "Logout Failed",
+        description: "An error occurred while logging out. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleCardClick = (path: string) => {
@@ -209,7 +220,9 @@ const Dashboard = () => {
           <main className="flex-1 p-6">
             <div className="max-w-7xl mx-auto">
               <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2">Welcome back!</h1>
+                <h1 className="text-3xl font-bold mb-2">
+                  Welcome back{user?.user_metadata?.full_name ? `, ${user.user_metadata.full_name}` : ''}!
+                </h1>
                 <p className="text-muted-foreground">
                   Manage your digital legacy and keep your important information secure.
                 </p>

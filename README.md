@@ -8,7 +8,6 @@ This is a comprehensive digital legacy management platform that helps users secu
 
 ### Authentication & Security
 - **Email/Password Authentication**: Secure login with Supabase
-- **Google OAuth Integration**: One-click social authentication
 - **Protected Routes**: Dashboard access control
 - **Death Certificate Verification**: .gov.in domain validation for nominee access
 

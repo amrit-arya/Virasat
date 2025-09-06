@@ -33,11 +33,11 @@ A comprehensive digital legacy management platform that helps users securely sto
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: React 18 + TypeScript + Vite
+- **Frontend**: React+ TypeScript + Vite
 - **Styling**: Tailwind CSS with custom design system
 - **UI Components**: shadcn/ui with custom variants
 - **Authentication**: Supabase Auth
-- **Database**: Supabase (PostgreSQL)
+- **Database**: Supabase (SQL)
 - **State Management**: React useState/useEffect
 - **Routing**: React Router v6
 - **Icons**: Lucide React

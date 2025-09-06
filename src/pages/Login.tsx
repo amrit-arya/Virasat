@@ -45,10 +45,10 @@ const Login = () => {
             description: "Invalid email or password. Please check your credentials and try again.",
             variant: "destructive"
           });
-        } else if (error.message.includes('Email not confirmed')) {
+        } else if (error.message.includes('User not found')) {
           toast({
-            title: "Email Not Confirmed",
-            description: "Please check your email and click the confirmation link before signing in.",
+            title: "Account Not Found",
+            description: "No account found with this email. Please sign up first.",
             variant: "destructive"
           });
         } else {
@@ -58,17 +58,6 @@ const Login = () => {
             variant: "destructive"
           });
         }
-        setIsLoading(false);
-        return;
-      }
-
-      // Check if email is confirmed
-      if (data.user && !data.user.email_confirmed_at) {
-        toast({
-          title: "Email Not Confirmed",
-          description: "Please check your email and click the confirmation link before signing in.",
-          variant: "destructive"
-        });
         setIsLoading(false);
         return;
       }
@@ -92,18 +81,27 @@ const Login = () => {
     }
   };
 
+
   const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      
+      if (error) {
+        toast({
+          title: "Google Sign In Failed",
+          description: error.message,
+          variant: "destructive"
+        });
       }
-    });
-    
-    if (error) {
+    } catch (error) {
       toast({
         title: "Google Sign In Failed",
-        description: error.message,
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
     }

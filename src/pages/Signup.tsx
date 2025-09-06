@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, ArrowLeft } from "lucide-react";
+import { Shield, ArrowLeft, Mail, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +18,8 @@ const Signup = () => {
     password: "",
     confirmPassword: ""
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -28,6 +30,7 @@ const Signup = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     
     if (!formData.name || !formData.email || !formData.phone || !formData.password) {
       toast({
@@ -35,6 +38,7 @@ const Signup = () => {
         description: "Please fill in all fields",
         variant: "destructive"
       });
+      setIsLoading(false);
       return;
     }
 
@@ -44,45 +48,64 @@ const Signup = () => {
         description: "Passwords do not match",
         variant: "destructive"
       });
+      setIsLoading(false);
       return;
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: formData.email,
-      password: formData.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
-        data: {
-          full_name: formData.name,
-          phone: formData.phone
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            full_name: formData.name,
+            phone: formData.phone
+          }
         }
+      });
+      
+      if (error) {
+        toast({
+          title: "Signup Failed",
+          description: error.message,
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
       }
-    });
-    
-    if (error) {
+
+      if (data.user && !data.user.email_confirmed_at) {
+        setEmailSent(true);
+        toast({
+          title: "Check your email!",
+          description: "We've sent you a confirmation link. Please check your email and click the link to verify your account.",
+        });
+      } else {
+        toast({
+          title: "Account created!",
+          description: "Welcome to Virasat. Redirecting to dashboard...",
+        });
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1500);
+      }
+    } catch (error) {
       toast({
         title: "Signup Failed",
-        description: error.message,
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
-      return;
+    } finally {
+      setIsLoading(false);
     }
-
-    toast({
-      title: "Account created!",
-      description: "Welcome to Virasat. Redirecting to dashboard...",
-    });
-
-    setTimeout(() => {
-      navigate('/dashboard');
-    }, 1500);
   };
 
   const handleGoogleSignup = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`
+        redirectTo: `${window.location.origin}/auth/callback`
       }
     });
     
@@ -94,6 +117,128 @@ const Signup = () => {
       });
     }
   };
+
+  const handleResendEmail = async () => {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: formData.email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+
+      if (error) {
+        toast({
+          title: "Resend Failed",
+          description: error.message,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Email sent!",
+        description: "We've sent you another confirmation email.",
+      });
+    } catch (error) {
+      toast({
+        title: "Resend Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (emailSent) {
+    return (
+      <div 
+        className="min-h-screen flex items-center justify-center px-4 py-8 relative"
+        style={{
+          backgroundImage: `url('/uploads/c63d55ff-44f6-4588-a4cd-f0df9ee47bc5.png')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed'
+        }}
+      >
+        {/* Background Overlay */}
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        
+        {/* Content */}
+        <div className="relative z-10 w-full max-w-md">
+          {/* Header */}
+          <div className="text-center mb-8 relative">
+            <Button 
+              variant="ghost" 
+              onClick={() => navigate('/')}
+              className="absolute top-0 left-0 text-white hover:bg-white/20 z-10"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Home
+            </Button>
+            <div className="flex items-center justify-center space-x-2 mb-4">
+              <Shield className="h-8 w-8 text-yellow-400" />
+              <span className="text-2xl font-bold text-white">Virasat</span>
+            </div>
+          </div>
+
+          {/* Email Confirmation Card */}
+          <Card variant="bordered" className="bg-white/95 backdrop-blur-sm border-white/20 shadow-2xl">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 p-3 bg-green-100 rounded-full w-fit">
+                <Mail className="h-8 w-8 text-green-600" />
+              </div>
+              <CardTitle className="text-2xl">Check Your Email</CardTitle>
+              <CardDescription className="text-base">
+                We've sent a confirmation link to <strong>{formData.email}</strong>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Please check your email and click the confirmation link to verify your account.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Don't see the email? Check your spam folder.
+                </p>
+              </div>
+              
+              <div className="space-y-3">
+                <Button 
+                  onClick={handleResendEmail}
+                  variant="outline" 
+                  className="w-full"
+                >
+                  Resend Confirmation Email
+                </Button>
+                
+                <Button 
+                  onClick={() => setEmailSent(false)}
+                  variant="ghost" 
+                  className="w-full"
+                >
+                  Back to Signup
+                </Button>
+              </div>
+
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  Already confirmed?{' '}
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    Sign in here
+                  </button>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -204,8 +349,8 @@ const Signup = () => {
                 />
               </div>
 
-              <Button type="submit" variant="hero" className="w-full">
-                Create Account
+              <Button type="submit" variant="hero" className="w-full" disabled={isLoading}>
+                {isLoading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
 
@@ -225,6 +370,7 @@ const Signup = () => {
                 variant="outline"
                 className="w-full mt-4"
                 onClick={handleGoogleSignup}
+                disabled={isLoading}
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                   <path

@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Virasat Design System - Legacy Guardian App
+Primary: Lemon Yellow (#FFD700 softer pastel) + White
+Typography: Poppins (clean, modern)
+All colors MUST be HSL.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Core Brand Colors */
+    --background: 0 0% 100%;
+    --foreground: 210 12% 16%;
+    
+    /* Lemon Yellow Palette - Exact #FFD700 */
+    --primary: 51 100% 50%;
+    --primary-foreground: 210 12% 16%;
+    --primary-hover: 51 100% 45%;
+    --primary-soft: 51 100% 90%;
+    
+    /* Card & UI Elements */
+    --card: 0 0% 100%;
+    --card-foreground: 210 12% 16%;
+    --card-border: 51 100% 50%;
+    
+    /* Input & Form Elements */
+    --input: 0 0% 100%;
+    --input-border: 210 8% 85%;
+    --input-border-focus: 51 100% 50%;
+    
+    /* Secondary & Muted */
+    --secondary: 210 8% 96%;
+    --secondary-foreground: 210 12% 16%;
+    
+    --muted: 210 8% 96%;
+    --muted-foreground: 210 8% 45%;
+    
+    /* Interactive States */
+    --accent: 51 100% 90%;
+    --accent-foreground: 210 12% 16%;
+    
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders & Rings */
+    --border: 210 8% 90%;
+    --ring: 51 100% 50%;
+
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 12% 16%;
+
+    /* Design Tokens */
+    --radius: 0.75rem;
+    --shadow-soft: 0 4px 16px hsl(51 100% 50% / 0.1);
+    --shadow-card: 0 2px 8px hsl(51 100% 50% / 0.15);
+    --shadow-button: 0 2px 4px hsl(51 100% 45% / 0.2);
+    
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(51 100% 55%) 0%, hsl(51 100% 85%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(51 100% 95%) 100%);
+    
+    /* Animations */
+    --transition-smooth: all 0.2s ease-out;
+    --transition-bounce: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 210 12% 16%;
+    --sidebar-primary: 51 100% 50%;
+    --sidebar-primary-foreground: 210 12% 16%;
+    --sidebar-accent: 51 100% 90%;
+    --sidebar-accent-foreground: 210 12% 16%;
+    --sidebar-border: 51 100% 50%;
+    --sidebar-ring: 51 100% 50%;
+  }
+
+  /* Dark mode not implemented - focusing on light theme */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-poppins;
+  }
+  
+  /* Utility Classes */
+  .glass-effect {
+    backdrop-filter: blur(10px);
+    background: hsla(0, 0%, 100%, 0.8);
+  }
+  
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  
+  .shadow-button {
+    box-shadow: var(--shadow-button);
+  }
+  
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+  
+  .transition-bounce {
+    transition: var(--transition-bounce);
+  }
+}

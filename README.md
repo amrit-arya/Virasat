@@ -1,6 +1,7 @@
 # Virasat - The Legacy Guardian
 
-This project is made for HackOdisha 5.0
+This project is made for HackOdisha 5.0 .
+
 This is a comprehensive digital legacy management platform that helps users securely store and manage important documents, assets, and information for their beneficiaries.
 
 ## 🚀 Features
